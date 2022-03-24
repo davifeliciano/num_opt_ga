@@ -1,10 +1,8 @@
 from numpy.typing import ArrayLike, NDArray
 import numpy as np
 
-number = float | int
 
-
-def number_to_bin(value: number, bits: int) -> NDArray:
+def number_to_bin(value: float | int, bits: int) -> NDArray:
     """
     Convert the closest integer of a value to its binary
     representation, stored in a np.ndarray.
@@ -33,3 +31,11 @@ def bin_to_number(array: ArrayLike) -> NDArray:
     array = np.array(array, dtype=int).transpose()
     binary_array = (array != 0).astype(int)
     return binary_array.dot(2 ** np.arange(binary_array.shape[-1])[::-1])
+
+
+def is_multiple(value: int, number: int) -> bool:
+    return value % number == 0
+
+
+def next_multiple_of(value: int, number: int) -> int:
+    return value + number - value % number
