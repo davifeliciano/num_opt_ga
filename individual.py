@@ -275,7 +275,14 @@ class Individual:
         not_recomb_array = np.logical_not(recomb_array)
 
         # Create a array with the probabilities of mutation of each gene
-        if isinstance(mut_prob, float):
+        if isinstance(mut_prob, (int, float)):
+            if mut_prob < 0.0:
+                print("The mut_prob argument in recombine() must be positive")
+                print("Picking the absolute value of the supplied value instead")
+            if mut_prob > 1.0:
+                print("The mut_prob argument in recombine() must be in [0, 1]")
+                print("Picking the decimal part of the supplied value instead")
+
             mut_prob = abs(mut_prob % 1)
             mut_prob_array = np.full(shape=self.dna.shape, fill_value=mut_prob)
         else:
