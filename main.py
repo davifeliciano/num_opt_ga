@@ -53,29 +53,36 @@ def function_3(x: NDArray | float, y: NDArray | float) -> NDArray | float:
 
 
 functions = (function_1, function_2, function_3)
+pop_count = 6
 pop_size = 100
 gens = 200
+best_count = 3
 
 for i, function in enumerate(functions):
     logger.info(f"Optmizing Sample Function {i + 1}")
-    logger.info(f"Initializing population with {pop_size} individuals")
-    ga = NumericalOptimizationGA(
-        search_region=((-1, 1), (-1, 1)),
-        function=lambda pos: function(pos[0], pos[1]),
-        bits=32,
-        pop_size=pop_size,
-    )
+    logger.info(f"Initializing {pop_count} populations with {pop_size} individuals")
 
-    logger.info(f"Evolving population for {gens} generations")
+    gas = [
+        NumericalOptimizationGA(
+            search_region=((-1, 1), (-1, 1)),
+            function=lambda pos: function(pos[0], pos[1]),
+            bits=32,
+            pop_size=pop_size,
+        )
+        for _ in range(pop_count)
+    ]
+
+    logger.info(f"Evolving populations for {gens} generations")
     with cProfile.Profile() as profiler:
-        while ga.gen < 200:
-            ga.evolve()
+        for ga in gas:
+            while ga.gen < 200:
+                ga.evolve()
 
     logger.info("Done! Profiler results:\n")
     stats = pstats.Stats(profiler)
     stats.sort_stats("time").print_stats(10)
 
-    logger.info("Creating figure")
+    logger.info(f"Creating figure with the {best_count} individuals of each population")
     fig = plt.figure()
     ax_contour = fig.add_subplot(1, 2, 1)
     ax_3d = fig.add_subplot(1, 2, 2, projection="3d")
@@ -85,7 +92,11 @@ for i, function in enumerate(functions):
 
     ax_contour.contour(x, y, function(x, y), levels=10, cmap=cm.jet, zorder=-1)
 
-    for individual in ga.population:
+    elite_pop = []
+    for ga in gas:
+        elite_pop += ga.best(best_count)
+
+    for individual in elite_pop:
         ax_contour.scatter(*individual.pos, marker="+", color="black", lw=1.0)
 
     ax_3d.plot_trisurf(
