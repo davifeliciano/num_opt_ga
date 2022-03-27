@@ -280,3 +280,16 @@ class NumericalOptimizationGA:
         self.selection(repeat=repeat)
         self.recombination()
         self._gen += 1
+
+    def best(self, count: int = 5) -> List[Individual]:
+        """
+        Return a list with the n best individuals in the population
+        """
+
+        func_values = [self.function(individual.pos) for individual in self.population]
+        fit_func_values = self.fit_function(func_values).tolist()
+        indexes = [i for i in range(self.pop_size)]
+        sorted_indexes = sorted(
+            indexes, key=lambda index: fit_func_values[index], reverse=True
+        )
+        return [self.population[index] for index in sorted_indexes[:count]]
