@@ -202,7 +202,7 @@ class NumericalOptimizationGA:
         self._check_fit_func_arg(func_values_array)
         return np.exp(-self.fit_func_param * func_values_array)
 
-    def selection(self, repetition: bool = True) -> None:
+    def selection(self, repeat: bool = False) -> None:
         """
         Perform selection based on the value of the attribute tuple, and the
         selection probabilities evaluated by means of the fitness function
@@ -220,7 +220,7 @@ class NumericalOptimizationGA:
         indexes = rng.choice(
             np.arange(self.pop_size, dtype=int),
             size=roulette_size,
-            replace=repetition,
+            replace=repeat,
             p=selection_probs,
         )
 
@@ -271,12 +271,12 @@ class NumericalOptimizationGA:
 
         self._population += offsprings
 
-    def evolve(self) -> None:
+    def evolve(self, repeat: bool = False) -> None:
         """
         Perform selection and recombination, and produces the next
         generation of individuals
         """
 
-        self.selection()
+        self.selection(repeat=repeat)
         self.recombination()
         self._gen += 1
