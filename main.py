@@ -1,6 +1,9 @@
+import sys
+import os
 import logging
-import cProfile
-import pstats
+import time
+import multiprocessing as mp
+from typing import List
 from numpy.typing import NDArray
 import numpy as np
 import matplotlib.pyplot as plt
@@ -52,62 +55,121 @@ def function_3(x: NDArray | float, y: NDArray | float) -> NDArray | float:
     return sum(exps)
 
 
+def to_string(seconds: float) -> str:
+    if seconds >= 60:
+        minutes = int(seconds / 60)
+        seconds = int(seconds % 60)
+        return (
+            f"{minutes} {'minute' if minutes == 1 else 'minutes'} and "
+            f"{seconds} {'second' if seconds == 1 else 'seconds'}"
+        )
+    return f"{seconds:.2f} {'second' if seconds == 1 else 'seconds'}"
+
+
+def timer(func):
+    def wrapper(*args, **kwargs):
+        start = time.time()
+        result = func(*args, **kwargs)
+        elapsed = time.time() - start
+        logger.info(f"Done in {to_string(elapsed)}")
+        return result
+
+    return wrapper
+
+
+def evolve_ga(ga: NumericalOptimizationGA) -> NumericalOptimizationGA | None:
+    try:
+        while ga.gen < gens:
+            ga.evolve()
+        return ga
+    # Ignore KeyboardInterrupt on a child process
+    except KeyboardInterrupt:
+        return None
+
+
+@timer
+def evolve_gas(
+    ga_list: List[NumericalOptimizationGA], processes: int
+) -> List[NumericalOptimizationGA]:
+    with mp.Pool(processes) as pool:
+        try:
+            return pool.map(evolve_ga, ga_list)
+        except KeyboardInterrupt:
+            # Kill the pool when KeyboardInterrupt is raised
+            logger.info(f"Process terminated by the user")
+            pool.terminate()
+            pool.join()
+            sys.exit(1)
+
+
+@timer
+def save_fig(fig, filename: str) -> None:
+    fig.savefig(filename, dpi=200)
+
+
 functions = (function_1, function_2, function_3)
-pop_count = 6
+pop_count = mp.cpu_count()
 pop_size = 100
 gens = 200
 best_count = 3
+terminal_cols = os.get_terminal_size().columns
 
-for i, function in enumerate(functions):
-    logger.info(f"Optmizing Sample Function {i + 1}")
-    logger.info(f"Initializing {pop_count} populations with {pop_size} individuals")
+if __name__ == "__main__":
 
-    gas = [
-        NumericalOptimizationGA(
-            search_region=((-1, 1), (-1, 1)),
-            function=lambda pos: function(pos[0], pos[1]),
-            bits=32,
-            pop_size=pop_size,
+    # Creating a function at top level since the process pool demands
+    # NumericalOptimizationGA to be fully pickable
+    def ga_function(pos: NDArray) -> float:
+        return function(*pos)
+
+    for i, function in enumerate(functions):
+        logger.info(f"Optmizing Sample Function {i + 1}")
+        logger.info(f"Initializing {pop_count} populations with {pop_size} individuals")
+
+        gas = [
+            NumericalOptimizationGA(
+                search_region=((-1, 1), (-1, 1)),
+                function=ga_function,
+                bits=32,
+                pop_size=pop_size,
+            )
+            for _ in range(pop_count)
+        ]
+
+        logger.info(f"Evolving populations for {gens} generations")
+        gas = evolve_gas(gas, processes=pop_count)
+
+        logger.info(
+            f"Creating figure with the {best_count} individuals of each population"
         )
-        for _ in range(pop_count)
-    ]
+        fig = plt.figure()
+        ax_contour = fig.add_subplot(1, 2, 1)
+        ax_3d = fig.add_subplot(1, 2, 2, projection="3d")
 
-    logger.info(f"Evolving populations for {gens} generations")
-    with cProfile.Profile() as profiler:
+        # Setting up axis labels
+        ax_contour.set(xlabel="x", ylabel="y")
+        ax_3d.set(xlabel="x", ylabel="y", zlabel="f(x, y)")
+
+        x = y = np.linspace(-1, 1, 250)
+        x, y = np.meshgrid(x, y)
+
+        ax_contour.contour(x, y, function(x, y), levels=10, cmap=cm.jet, zorder=-1)
+
+        elite_pop = []
         for ga in gas:
-            while ga.gen < 200:
-                ga.evolve()
+            elite_pop += ga.best(best_count)
 
-    logger.info("Done! Profiler results:\n")
-    stats = pstats.Stats(profiler)
-    stats.sort_stats("time").print_stats(10)
+        for individual in elite_pop:
+            ax_contour.scatter(*individual.pos, marker="+", color="black", lw=1.0)
 
-    logger.info(f"Creating figure with the {best_count} individuals of each population")
-    fig = plt.figure()
-    ax_contour = fig.add_subplot(1, 2, 1)
-    ax_3d = fig.add_subplot(1, 2, 2, projection="3d")
+        ax_3d.plot_trisurf(
+            x.flatten(),
+            y.flatten(),
+            function(x, y).flatten(),
+            cmap=cm.jet,
+        )
 
-    x = y = np.linspace(-1, 1, 250)
-    x, y = np.meshgrid(x, y)
-
-    ax_contour.contour(x, y, function(x, y), levels=10, cmap=cm.jet, zorder=-1)
-
-    elite_pop = []
-    for ga in gas:
-        elite_pop += ga.best(best_count)
-
-    for individual in elite_pop:
-        ax_contour.scatter(*individual.pos, marker="+", color="black", lw=1.0)
-
-    ax_3d.plot_trisurf(
-        x.flatten(),
-        y.flatten(),
-        function(x, y).flatten(),
-        cmap=cm.jet,
-    )
-
-    logger.info("Done!")
-    filename = f"sample_function_{i + 1}.png"
-    logger.info(f"Saving Figure as {filename}")
-    fig.savefig(filename, dpi=200)
-    logger.info("Done!\n")
+        logger.info("Done!")
+        filename = f"sample_function_{i + 1}.png"
+        logger.info(f"Saving Figure as {filename}")
+        save_fig(fig, filename)
+        print(terminal_cols * "-")
