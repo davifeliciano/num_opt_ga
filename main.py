@@ -1,5 +1,6 @@
 import sys
 import os
+import argparse
 import logging
 import time
 import multiprocessing as mp
@@ -10,8 +11,59 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 from num_opt_ga import NumericalOptimizationGA
 
+# Setting up argparse
+description = (
+    "A tool to visualize the Numerical Optimization Genetic Algorithm "
+    "in action. It evolves a number of populations that match the number "
+    "of logical processors in the machine, with the given number of "
+    "individuals, for the specified number of generations. Being e an integer "
+    "supplied by the user, that process is done for three sample functions, "
+    "and after it, the position of the best e individuals of each population "
+    "are ploted as a black cross along with the level curves of each function."
+)
+parser = argparse.ArgumentParser(description=description)
+
+parser.add_argument(
+    "-p",
+    "--pop-size",
+    type=int,
+    nargs="?",
+    default=100,
+    const=100,
+    help="the number of individuals to compose the populations.",
+)
+
+parser.add_argument(
+    "-g",
+    "--gens",
+    type=int,
+    nargs="?",
+    default=300,
+    const=300,
+    help=(
+        "the number of generations to evaluate in the evolution "
+        "process of each population."
+    ),
+)
+
+parser.add_argument(
+    "-e",
+    "--elite",
+    type=int,
+    nargs="?",
+    default=3,
+    const=3,
+    help=(
+        "the number of individuals to compose the elite of each "
+        "population. The best e individual will have its position "
+        "ploted in the result."
+    ),
+)
+
+args = parser.parse_args()
+
 # Setting up logger
-LOG_FORMAT = "%(asctime)s : %(message)s"
+LOG_FORMAT = "%(levelname)s : %(asctime)s : %(message)s"
 logging.basicConfig(format=LOG_FORMAT)
 logger = logging.getLogger("logger")
 logger.setLevel("INFO")
@@ -109,10 +161,17 @@ def save_fig(fig, filename: str) -> None:
 
 functions = (function_1, function_2, function_3)
 pop_count = mp.cpu_count()
-pop_size = 100
-gens = 200
-best_count = 3
-terminal_cols = os.get_terminal_size().columns
+pop_size = abs(args.pop_size)
+gens = abs(args.gens)
+elite = abs(args.elite)
+
+# Looking for ValueErrors
+if elite > pop_size:
+    logger.warning(
+        "The number of individuals in the elite must be less or "
+        "equal to the size of the populations. Using elite=3 instead"
+    )
+    elite = 3
 
 if __name__ == "__main__":
 
@@ -138,9 +197,7 @@ if __name__ == "__main__":
         logger.info(f"Evolving populations for {gens} generations")
         gas = evolve_gas(gas, processes=pop_count)
 
-        logger.info(
-            f"Creating figure with the {best_count} individuals of each population"
-        )
+        logger.info(f"Creating figure with the {elite} individuals of each population")
         fig = plt.figure()
         ax_contour = fig.add_subplot(1, 2, 1)
         ax_3d = fig.add_subplot(1, 2, 2, projection="3d")
@@ -156,7 +213,7 @@ if __name__ == "__main__":
 
         elite_pop = []
         for ga in gas:
-            elite_pop += ga.best(best_count)
+            elite_pop += ga.best(elite)
 
         for individual in elite_pop:
             ax_contour.scatter(*individual.pos, marker="+", color="black", lw=1.0)
@@ -172,4 +229,4 @@ if __name__ == "__main__":
         filename = f"sample_function_{i + 1}.png"
         logger.info(f"Saving Figure as {filename}")
         save_fig(fig, filename)
-        print(terminal_cols * "-")
+        print(os.get_terminal_size().columns * "-")
