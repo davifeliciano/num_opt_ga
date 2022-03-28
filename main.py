@@ -76,35 +76,54 @@ plt.rcParams.update(
 )
 
 
+def distance(
+    x: NDArray | float,
+    y: NDArray | float,
+    xc: NDArray | float,
+    yc: NDArray | float,
+) -> NDArray | float:
+    """
+    Computes the distance between (x, y) and (xc, yc)
+    """
+
+    return np.sqrt((x - xc) ** 2 + (y - yc) ** 2)
+
+
+def gaussian(
+    amp: NDArray | float,
+    r: NDArray | float,
+    sigma: NDArray | float,
+) -> NDArray | float:
+    """
+    A Gaussian in polar coordinates with amplitude amp and width sigma
+    """
+
+    return amp * np.exp(-((r / sigma) ** 2))
+
+
 def function_1(x: NDArray | float, y: NDArray | float) -> NDArray | float:
-    r = np.sqrt((x - 0.5) ** 2 + (y - 0.5) ** 2)
-    n = 9
-    sigma = 0.4
-    return np.cos(n * np.pi * r) * np.exp(-((r / sigma) ** 2))
+    r = distance(x, y, 0.5, 0.5)
+    return np.cos(9 * np.pi * r) * gaussian(1.0, r, 0.4)
 
 
 def function_2(x: NDArray | float, y: NDArray | float) -> NDArray | float:
     xs = (0.5, 0.6)
     ys = (0.5, 0.1)
-    rs = [np.sqrt((x - xc) ** 2 + (y - yc) ** 2) for xc, yc in zip(xs, ys)]
+    rs = [distance(x, y, xc, yc) for xc, yc in zip(xs, ys)]
     sigmas = (0.3, 0.1)
     amps = (0.8, 1.0)
-    exps = [
-        amp * np.exp(-((r / sigma) ** 2)) for amp, r, sigma in zip(amps, rs, sigmas)
-    ]
-    return sum(exps)
+    gaussians = [gaussian(amp, r, sigma) for amp, r, sigma in zip(amps, rs, sigmas)]
+    return sum(gaussians)
 
 
 def function_3(x: NDArray | float, y: NDArray | float) -> NDArray | float:
     xs = (0.5, 0.1, -0.2, -0.3)
     ys = (0.5, -0.6, -0.3, 0.4)
-    rs = [np.sqrt((x - xc) ** 2 + (y - yc) ** 2) for xc, yc in zip(xs, ys)]
+    rs = [distance(x, y, xc, yc) for xc, yc in zip(xs, ys)]
     sigmas = (0.4, 0.3, 0.5, 0.2)
     amps = (-0.5, 0.7, -0.3, 0.4)
-    exps = [
-        amp * np.exp(-((r / sigma) ** 2)) for amp, r, sigma in zip(amps, rs, sigmas)
-    ]
-    return sum(exps)
+    gaussians = [gaussian(amp, r, sigma) for amp, r, sigma in zip(amps, rs, sigmas)]
+    return sum(gaussians)
 
 
 def to_string(seconds: float) -> str:
