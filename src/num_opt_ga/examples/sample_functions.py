@@ -24,6 +24,16 @@ description = (
 parser = argparse.ArgumentParser(description=description)
 
 parser.add_argument(
+    "-f",
+    "--functions",
+    type=str,
+    choices=("all", "damped_cossine", "near_gaussians", "sparse_gaussians"),
+    nargs="*",
+    default=["all"],
+    help="the functions to optimize",
+)
+
+parser.add_argument(
     "-p",
     "--pop-size",
     type=int,
@@ -101,12 +111,12 @@ def gaussian(
     return amp * np.exp(-((r / sigma) ** 2))
 
 
-def function_1(x: NDArray | float, y: NDArray | float) -> NDArray | float:
+def damped_cossine(x: NDArray | float, y: NDArray | float) -> NDArray | float:
     r = distance(x, y, 0.5, 0.5)
     return np.cos(9 * np.pi * r) * gaussian(1.0, r, 0.4)
 
 
-def function_2(x: NDArray | float, y: NDArray | float) -> NDArray | float:
+def near_gaussians(x: NDArray | float, y: NDArray | float) -> NDArray | float:
     xs = (0.5, 0.6)
     ys = (0.5, 0.1)
     rs = [distance(x, y, xc, yc) for xc, yc in zip(xs, ys)]
@@ -116,7 +126,7 @@ def function_2(x: NDArray | float, y: NDArray | float) -> NDArray | float:
     return sum(gaussians)
 
 
-def function_3(x: NDArray | float, y: NDArray | float) -> NDArray | float:
+def sparse_gaussians(x: NDArray | float, y: NDArray | float) -> NDArray | float:
     xs = (0.5, 0.1, -0.2, -0.3)
     ys = (0.5, -0.6, -0.3, 0.4)
     rs = [distance(x, y, xc, yc) for xc, yc in zip(xs, ys)]
@@ -178,7 +188,15 @@ def save_fig(fig, filename: str) -> None:
     fig.savefig(filename, dpi=200)
 
 
-functions = (function_1, function_2, function_3)
+functions = {
+    "damped_cossine": damped_cossine,
+    "near_gaussians": near_gaussians,
+    "sparse_gaussians": sparse_gaussians,
+}
+
+if "all" not in args.functions:
+    functions = {key: functions[key] for key in args.functions}
+
 pop_count = mp.cpu_count()
 pop_size = abs(args.pop_size)
 gens = abs(args.gens)
@@ -199,8 +217,8 @@ if __name__ == "__main__":
     def ga_function(pos: NDArray) -> float:
         return function(*pos)
 
-    for i, function in enumerate(functions):
-        logger.info(f"Optmizing Sample Function {i + 1}")
+    for func_name, function in functions.items():
+        logger.info(f"Optmizing function {func_name}")
         logger.info(f"Initializing {pop_count} populations with {pop_size} individuals")
 
         gas = [
@@ -245,7 +263,7 @@ if __name__ == "__main__":
         )
 
         logger.info("Done!")
-        filename = f"sample_function_{i + 1}.png"
+        filename = f"{func_name}.png"
         logger.info(f"Saving Figure as {filename}")
         save_fig(fig, filename)
         print(os.get_terminal_size().columns * "-")
