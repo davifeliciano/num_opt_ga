@@ -9,7 +9,7 @@ from numpy.typing import NDArray
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
-from num_opt_ga import NumericalOptimizationGA
+from ..num_opt_ga import NumericalOptimizationGA
 
 # Setting up argparse
 description = (

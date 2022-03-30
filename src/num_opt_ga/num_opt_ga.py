@@ -2,8 +2,8 @@ from __future__ import annotations
 from typing import Callable, List, Sequence
 from numpy.typing import ArrayLike, NDArray
 import numpy as np
-from individual import rng, Region, Individual
-from utils import is_multiple, next_multiple_of
+from .individual import rng, Region, Individual
+from .utils import is_multiple, next_multiple_of
 
 
 class NumericalOptimizationGA:

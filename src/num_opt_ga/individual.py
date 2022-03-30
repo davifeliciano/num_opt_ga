@@ -3,7 +3,7 @@ from typing import List, Optional
 from numpy.typing import ArrayLike, NDArray
 from numpy.random import default_rng
 import numpy as np
-from utils import number_to_bin, bin_to_number
+from .utils import number_to_bin, bin_to_number
 
 rng = default_rng()
 
