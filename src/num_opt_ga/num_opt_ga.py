@@ -29,18 +29,22 @@ class NumericalOptimizationGA:
         self._bits = int(bits)
         self._fit_func_param = abs(float(fit_func_param))
 
-        # Checking pop_size
-        pop_size = int(pop_size)
-        if not is_multiple(pop_size, 4):
+        # Checking pop_size : it should be multiple of 4
+        pop_size = abs(int(pop_size))
+        if not is_multiple(pop_size, 4) or pop_size == 0:
             pop_size = next_multiple_of(pop_size, 4)
-            print("pop_size need to be a multiple of 4")
-            print(f"Using pop_size={pop_size}")
+            print(
+                f"Argument pop_size of {self.__class__.__name__} need "
+                f"to be a non-null multiple of 4. Using pop_size={pop_size}"
+            )
 
-        # Checking fit_func_type
+        # Checking fit_func_type : should be "linear" or "boltzmann"
         valid_types = ("linear", "boltzmann")
         if fit_func_type not in valid_types:
-            print("Valid fit_func_type values are 'linear' and 'boltzmann'")
-            print(f"fit_func_type={fit_func_type} was given. Using 'linear' instead")
+            print(
+                f"Argument fit_func_type of {self.__class__.__name__} must "
+                f"be 'linear' or 'boltzmann'. Using fit_func_type='linear' instead"
+            )
             self._fit_func_type = "linear"
         else:
             self._fit_func_type = fit_func_type
@@ -50,14 +54,17 @@ class NumericalOptimizationGA:
         else:
             self._fit_function = self.boltzmann_fit_function
 
-        # Checking elite
+        # Checking elite : should be a sequence of 3 ints, all greater than 2,
+        #                  elite[0] and elite[1] must be even,
+        #                  elite[0] + elite[1] < pop_size // 2,
+        #                  elite[2] < (pop_size - elite[0] - elite[1]) // 2
         for value in elite:
             if value < 2:
                 raise ValueError("The values in elite must be all greater than 2")
 
         try:
             if len(elite) < 3:
-                raise ValueError("Invalid elite size")
+                raise ValueError("Invalid elite lenght.")
             for value in elite[:2]:
                 if not isinstance(value, int):
                     raise ValueError("Invalid type in elite values")
@@ -74,21 +81,22 @@ class NumericalOptimizationGA:
                 print("Using the nearest greater even values instead")
                 elites.append(next_multiple_of(value, 2))
 
-        if sum(elites) > pop_size // 2 // 3:
+        if elite[0] + elite[1] > pop_size // 2:
             raise ValueError(
                 "The sum of the first two values of elite must not "
-                "excced a sixth of pop_size"
+                "excced half of the size of the population"
             )
 
-        if elite[2] >= pop_size // 2:
+        if elite[2] > (pop_size - elite[0] - elite[1]) // 2:
             raise ValueError(
-                "The third value in elite must not exceed half the pop_size"
+                "The third value in elite must not exceed half the "
+                "size of the non-elite population"
             )
 
         elites.append(elite[2])
         self._elite = tuple(elites)
 
-        # Checking mut_probs
+        # Checking mut_probs : it must be a sequence of 2 floats
         try:
             if len(elite) < 2:
                 raise ValueError("Invalid mut_prob size")
