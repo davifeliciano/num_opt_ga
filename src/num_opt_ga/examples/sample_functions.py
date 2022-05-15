@@ -44,7 +44,7 @@ parser.add_argument(
     nargs="?",
     default=100,
     const=100,
-    help="the number of individuals to compose the populations.",
+    help="the number of individuals to compose the populations. Default is 100.",
 )
 
 parser.add_argument(
@@ -56,32 +56,51 @@ parser.add_argument(
     const=300,
     help=(
         "the number of generations to evaluate in the evolution "
-        "process of each population."
+        "process of each population. Default is 300."
     ),
 )
 
 parser.add_argument(
     "-e",
     "--elite",
-    type=int,
+    type=float,
     nargs=2,
-    default=[3, 3],
+    default=[1.0, 0.2],
     metavar=("E1", "E2"),
     help=(
-        "two integers E1 and E2. Two plots will be rendered: one with the position of "
-        "the best E1 individuals of each population along with the level curves of "
-        "each function, and another with the evolution of the function values for "
-        "the best E2 individuals along the generations."
+        "two floats E1 and E2 between 0 and 1. Two plots will be rendered: "
+        "one with the position of the best E1 percent of individuals of each "
+        "population along with the level curves of each function, and another "
+        "with the evolution of the function values for the best E2 percent of "
+        "individuals along the generations. Defaults are 1.0 and 0.2, respectively."
     ),
 )
 
-args = parser.parse_args()
+parser.add_argument(
+    "-m",
+    "--mut-probs",
+    type=float,
+    nargs=2,
+    default=[0.1, 0.1],
+    metavar=("M1", "M2"),
+    help=(
+        "two floats M1 and M2 between 0 and 1. M1 is the probability of "
+        "mutation on the crossover between members of the elite and M2 is "
+        "the probability of mutation of the rest of the population. "
+        "Defaults are 0.1 and 0.1, respectively."
+    ),
+)
 
-# Setting up logger
-LOG_FORMAT = "%(levelname)s : %(asctime)s : %(message)s"
-logging.basicConfig(format=LOG_FORMAT)
-logger = logging.getLogger("logger")
-logger.setLevel("INFO")
+parser.add_argument(
+    "-t",
+    "--tex",
+    action="store_true",
+    help=(
+        "use latex to render the figure labels. When using this option "
+        "make sure to have a LaTeX distribution installed, as "
+        "well as the mathpazo font package."
+    ),
+)
 
 
 def distance(
@@ -109,6 +128,7 @@ def gaussian(
     return amp * np.exp(-((r / sigma) ** 2))
 
 
+# Functions to optimize
 def damped_cossine(x: NDArray | float, y: NDArray | float) -> NDArray | float:
     r = distance(x, y, 0.5, 0.5)
     return np.cos(9 * np.pi * r) * gaussian(1.0, r, 0.4)
@@ -132,31 +152,6 @@ def sparse_gaussians(x: NDArray | float, y: NDArray | float) -> NDArray | float:
     amps = (-0.5, 0.7, -0.3, 0.4)
     gaussians = [gaussian(amp, r, sigma) for amp, r, sigma in zip(amps, rs, sigmas)]
     return sum(gaussians)
-
-
-plot_types = ("position", "func_evolution")
-functions = {
-    "damped_cossine": damped_cossine,
-    "near_gaussians": near_gaussians,
-    "sparse_gaussians": sparse_gaussians,
-}
-
-if "all" not in args.functions:
-    functions = {key: functions[key] for key in args.functions}
-
-pop_count = mp.cpu_count()
-pop_size = abs(args.pop_size)
-gens = abs(args.gens)
-elite = args.elite
-
-# Looking for ValueErrors
-for i, value in enumerate(elite):
-    if value > pop_size:
-        logger.warning(
-            f"The value of e{i + 1} must be less or equal to the size "
-            f"of the populations. Using e{i + 1}=3 instead"
-        )
-        elite[i] = 3
 
 
 def to_string(seconds: float) -> str:
@@ -234,7 +229,12 @@ def evolve_gas(
 
 @timer
 def save_fig(fig, filename: str, dpi: int) -> None:
+    logger.info(f"Saving figure as {filename}")
     fig.savefig(filename, dpi=dpi)
+
+
+def is_percentage(value: float) -> bool:
+    return 0 <= value <= 1
 
 
 # Color generator to use in time evolution plots
@@ -245,12 +245,78 @@ def colors():
 
 if __name__ == "__main__":
 
+    # Parsing cl arguments
+    args = parser.parse_args()
+    defaults = parser.parse_args(args=[])
+
+    # Setting up logger
+    LOG_FORMAT = "%(levelname)s : %(asctime)s : %(message)s"
+    logging.basicConfig(format=LOG_FORMAT)
+    logger = logging.getLogger("logger")
+    logger.setLevel("INFO")
+
+    plot_types = ("position", "func_evolution")
+    functions = {
+        "damped_cossine": damped_cossine,
+        "near_gaussians": near_gaussians,
+        "sparse_gaussians": sparse_gaussians,
+    }
+
+    # Checking cl arguments
+    if "all" not in args.functions:
+        functions = {key: functions[key] for key in args.functions}
+
+    pop_count = mp.cpu_count()
+    pop_size = abs(args.pop_size)
+    gens = abs(args.gens)
+    elite_probs = args.elite
+    mut_probs = args.mut_probs
+
+    for i, (elite_value, mut_prob_value) in enumerate(zip(elite_probs, mut_probs)):
+        if not is_percentage(elite_value):
+            logger.warning(
+                f"The value of E{i + 1} must be between 0 and 1. "
+                f"Using E{i + 1} = {defaults.elite[i]} instead."
+            )
+            elite_probs[i] = defaults.elite[i]
+        if not is_percentage(mut_prob_value):
+            logger.warning(
+                f"The value of M{i + 1} must be between 0 and 1. "
+                f"Using M{i + 1} = {defaults.mut_probs[i]} instead."
+            )
+            mut_probs[i] = defaults.mut_probs[i]
+
+    elite = [int(elite_prob * pop_size) for elite_prob in elite_probs]
+
+    elite_points = pop_count * elite[0]
+    if elite_points > 10000:
+        logger.warning(
+            f"The contour plot will have the position of {elite_points} "
+            "individuals. The rendering of the image could take a long time."
+        )
+
+    elite_curves = pop_count * elite[1]
+    if elite_curves > 1800:
+        logger.warning(
+            f"The evolution plot will have {elite_curves} time series. "
+            "You may find dificult to distinguish each population. "
+            "Try smaller values of M2."
+        )
+
+    if args.tex:
+        plt.rcParams.update(
+            {
+                "text.usetex": True,
+                "text.latex.preamble": r"\usepackage[sc]{mathpazo}",
+            }
+        )
+
     # Creating a function at top level since the process pool demands
     # NumericalOptimizationGA to be fully pickable
     def ga_function(pos: NDArray) -> float:
         return function(*pos)
 
-    for func_name, function in functions.items():
+    for i, (func_name, function) in enumerate(functions.items()):
         logger.info(f"Optmizing function {func_name}")
         logger.info(f"Initializing {pop_count} populations with {pop_size} individuals")
 
@@ -261,6 +327,7 @@ if __name__ == "__main__":
                     function=ga_function,
                     bits=32,
                     pop_size=pop_size,
+                    mut_probs=mut_probs,
                 )
             )
             for _ in range(pop_count)
@@ -269,43 +336,78 @@ if __name__ == "__main__":
         logger.info(f"Evolving populations for {gens} generations")
         process_data_list = evolve_gas(process_data_list, processes=pop_count)
 
-        # Figure with the position of the best E1 (elite[0]) individuals
-        logger.info(
-            f"Creating figure with the position of the best {elite[0]} individuals of each population"
-        )
-
-        fig_3d = plt.figure(figsize=[10.8, 4.8])
-        ax_contour = fig_3d.add_subplot(1, 2, 1)
-        ax_3d = fig_3d.add_subplot(1, 2, 2, projection="3d")
-
-        # Setting up axis labels
-        ax_contour.set(xlabel="x", ylabel="y")
-        ax_3d.set(xlabel="x", ylabel="y", zlabel="f(x, y)")
-
-        x = y = np.linspace(-1, 1, 250)
+        # Meshgrid to use in the plots
+        x = y = np.linspace(-1, 1, 500)
         x, y = np.meshgrid(x, y)
 
-        ax_contour.contour(x, y, function(x, y), levels=10, cmap=cm.jet, zorder=-1)
+        # Figure with the graph of the function
+        logger.info(f"Creating figure with the graph of the function")
+        fig_3d = plt.figure()
+        ax_3d = fig_3d.add_subplot(projection="3d")
 
-        elite_pop = []
-        for process_data in process_data_list:
-            elite_pop += process_data.ga.best(elite[0])
-
-        # Ploting figure
-        for individual in elite_pop:
-            ax_contour.scatter(*individual.pos, marker="+", color="black", lw=1.0)
-
+        # Setting up axis and creating the plot
+        ax_3d.set(xlabel=r"$x$", ylabel=r"$y$", zlabel=rf"$f_{i + 1}(x, y)$")
         ax_3d.plot_trisurf(
             x.flatten(),
             y.flatten(),
             function(x, y).flatten(),
-            cmap=cm.jet,
+            cmap=cm.viridis,
         )
 
-        logger.info("Done!")
-        filename = f"position_{func_name}.png"
-        logger.info(f"Saving Figure as {filename}")
+        # Saving figure
+        filename = f"graph_{func_name}.png"
         save_fig(fig_3d, filename, dpi=300)
+
+        # Figure with the position of the best E1 (elite[0]) individuals
+        logger.info(
+            "Creating contour plot with the position of the best "
+            f"{elite[0]} individuals of each population"
+        )
+        fig_contour, ax_contour = plt.subplots()
+
+        # Setting up axis and creating the plot
+        ax_contour.set(aspect="equal", xlabel=r"$x$", ylabel=r"$y$")
+        ax_contour.contour(x, y, function(x, y), levels=10, cmap=cm.viridis, zorder=0)
+
+        # Creating list of elite to scatter on the plot
+        elite_pop = []
+        best_pop = []
+        for process_data in process_data_list:
+            elite_pop += process_data.ga.best(elite[0])
+            best_pop += process_data.ga.best()
+
+        for individual in elite_pop:
+            ax_contour.scatter(
+                *individual.pos,
+                color="black",
+                s=2.0,
+                alpha=0.15,
+                label="Individuals",
+                zorder=-1,
+            )
+
+        for individual in best_pop:
+            ax_contour.scatter(
+                *individual.pos,
+                marker="x",
+                color="red",
+                s=100.0,
+                label="Maximums",
+                zorder=1,
+            )
+
+        # Adding legend
+        handles, labels = ax_contour.get_legend_handles_labels()
+        by_label = dict(zip(labels, handles))
+        ax_contour.legend(
+            by_label.values(),
+            by_label.keys(),
+            loc="upper left",
+            framealpha=1.0,
+        )
+
+        filename = f"contour_{func_name}.png"
+        save_fig(fig_contour, filename, dpi=300)
 
         # Figure with the time evolution of the best E2 (elite[1]) individuals
         logger.info(
@@ -314,8 +416,39 @@ if __name__ == "__main__":
         )
         fig_time_evol, ax_time_evol = plt.subplots()
 
-        # Setting up axis labels
-        ax_time_evol.set(xlabel="gen", ylabel="f(x, y)")
+        # Setting up axis and creating the plot
+        ax_time_evol.set(
+            # yscale="log",
+            xlabel=r"$g$",
+            ylabel=rf"$f_{i + 1}(x, y)$",
+        )
+
+        mut_probs_zoom_lim = {
+            "damped_cossine": 0.15,
+            "near_gaussians": 0.3,
+            "sparse_gaussians": 0.0,
+        }
+
+        zoom_condition = (
+            mut_probs[0] < mut_probs_zoom_lim[func_name]
+            and mut_probs[1] < mut_probs_zoom_lim[func_name]
+        )
+
+        if zoom_condition:
+            ax_zoom = ax_time_evol.inset_axes((0.3, 0.075, 0.65, 0.55))
+            zoom_xlim = 4 * gens // 10
+            zoom_ylims = {
+                "damped_cossine": (0.7, 1.05),
+                "near_gaussians": (0.75, 1.05),
+            }
+            ax_zoom.set(
+                xlim=(-1, zoom_xlim),
+                ylim=zoom_ylims[func_name],
+                # xticklabels=[],
+                yticklabels=[],
+            )
+            ax_time_evol.indicate_inset_zoom(ax_zoom, edgecolor="black", alpha=1.0)
+
         # Number of populations to include in the figure
         fig_pop_count = 4 if pop_count > 3 else 2
         for process_data, color in zip(process_data_list[:fig_pop_count], colors()):
@@ -327,10 +460,15 @@ if __name__ == "__main__":
                     linewidth=0.5,
                     alpha=0.2,
                 )
+                if zoom_condition:
+                    ax_zoom.plot(
+                        process_data.gens_history[: zoom_xlim + 1],
+                        func_values_history[: zoom_xlim + 1],
+                        color=color,
+                        linewidth=0.5,
+                        alpha=0.2,
+                    )
 
-        logger.info("Done!")
         filename = f"evolution_{func_name}.png"
-        logger.info(f"Saving Figure as {filename}")
         save_fig(fig_time_evol, filename, dpi=500)
-
         print(os.get_terminal_size().columns * "-")
