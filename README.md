@@ -77,4 +77,6 @@ yielding
 
 ![Result](https://user-images.githubusercontent.com/26972046/168857024-625dab54-59b9-42e3-aebc-5289fe28e511.png)
 
-as expected, since the global maximum of this particular function is located at $r = 0$.
+as expected, since the global maximum of this particular function is located at
+$r = 0$. For other examples of usage, check the [examples
+submodule](https://github.com/davifeliciano/num_opt_ga/tree/main/src/num_opt_ga/examples).
