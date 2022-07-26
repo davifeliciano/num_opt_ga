@@ -99,7 +99,7 @@ class Individual:
                 min_lim = self._search_region.min
                 max_lim = self._search_region.max
                 dim = self._search_region.dim
-                pos = (max_lim - min_lim) * rng.random(size=dim) + min_lim
+                pos = rng.uniform(low=min_lim, high=max_lim, size=dim)
                 self._dna = self.dna_from_pos(pos)
             else:
                 dna = np.array(init_dna)

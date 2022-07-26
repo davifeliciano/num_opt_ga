@@ -55,6 +55,7 @@ class NumericalOptimizationGA:
             self._fit_function = self.boltzmann_fit_function
 
         # Checking elite : should be a sequence of 3 ints, all greater than 2,
+        #                  their sum must not exceed half the pop_size,
         #                  elite[0] and elite[1] must be even,
         #                  elite[0] + elite[1] < pop_size // 2,
         #                  elite[2] < (pop_size - elite[0] - elite[1]) // 2
@@ -80,6 +81,12 @@ class NumericalOptimizationGA:
                 print("The first two values of elite need to be multiples of 2")
                 print("Using the nearest greater even values instead")
                 elites.append(next_multiple_of(value, 2))
+
+        if sum(elite) > pop_size // 2:
+            raise ValueError(
+                "The sum of the values of elite must not "
+                "excced half of the size of the population"
+            )
 
         if elite[0] + elite[1] > pop_size // 2:
             raise ValueError(
@@ -218,10 +225,11 @@ class NumericalOptimizationGA:
 
         func_values = [self.function(individual.pos) for individual in self.population]
         fit_func_values = self.fit_function(func_values)
-        # Using abs here because for some reason a negative probability
-        # (of order e10-18) keeps appearing on the list, maybe due to
-        # floating point arithmetic imprecisions
-        selection_probs = np.abs(fit_func_values / fit_func_values.sum())
+        selection_probs = np.clip(
+            fit_func_values / fit_func_values.sum(),
+            a_min=0.0,
+            a_max=1.0,
+        )
         elite_size = sum(self.elite[:2])
         elite_index = np.argmax(selection_probs)
         roulette_size = self.pop_size // 2 - elite_size

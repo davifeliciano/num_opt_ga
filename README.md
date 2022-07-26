@@ -54,11 +54,10 @@ for _ in range(100):
 Now we can create a scatter plot with the position of the best individual
 
 ```python
-best_pos = [individual.pos for individual in ga.best(5)]
 
 import matplotlib.pyplot as plt
 
-best_pos = [individual.pos for individual in ga.best()]
+best_pos = [individual.pos for individual in ga.best(5)]
 best_x = [pos[0] for pos in best_pos]
 best_y = [pos[1] for pos in best_pos]
 
