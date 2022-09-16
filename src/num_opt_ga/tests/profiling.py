@@ -5,8 +5,8 @@ from ..num_opt_ga import NumericalOptimizationGA
 from ..examples.sample_functions import damped_cossine
 
 
-POP_SIZE = 1000
-GENS = 200
+POP_SIZE = 5000
+GENS = 500
 
 if __name__ == "__main__":
 
@@ -21,3 +21,4 @@ if __name__ == "__main__":
             ga.evolve()
 
     ps = pstats.Stats(profiler).sort_stats(pstats.SortKey.TIME).print_stats(10)
+    print("Best position =", ga.best(), sep="\n")
